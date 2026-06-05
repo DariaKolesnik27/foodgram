@@ -12,6 +12,7 @@ from core.constants import (
     TEXT_WIDTH,
 )
 
+
 User = get_user_model()
 
 

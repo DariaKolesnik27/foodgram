@@ -1,11 +1,14 @@
 import base64
 
-from core.constants import EMAIL_LENGTH, MAX_IMAGE_SIZE_MB, MAX_NAMES_LENGTH
-from core.mixins import AvatarMixin, ImageUrlMixin, SubscriptionMixin
-from core.validators import ingredient_validation, validate_tags
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.db import transaction
+from rest_framework import serializers
+from rest_framework.validators import UniqueTogetherValidator
+
+from core.constants import EMAIL_LENGTH, MAX_IMAGE_SIZE_MB, MAX_NAMES_LENGTH
+from core.mixins import AvatarMixin, ImageUrlMixin, SubscriptionMixin
+from core.validators import ingredient_validation, validate_tags
 from recipes.models import (
     Follow,
     Ingredient,
@@ -14,8 +17,7 @@ from recipes.models import (
     RecipeShortLink,
     Tag,
 )
-from rest_framework import serializers
-from rest_framework.validators import UniqueTogetherValidator
+
 
 User = get_user_model()
 

@@ -1,5 +1,6 @@
-from recipes.models import Ingredient, RecipeIngredient
 from rest_framework import serializers
+
+from recipes.models import Ingredient, RecipeIngredient
 
 
 def ingredient_validation(ingredients, recipe):

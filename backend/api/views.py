@@ -1,6 +1,5 @@
 import uuid
 
-from core.constants import MAX_LINK_LENGTH
 from django.contrib.auth import get_user_model
 from django.db.models import Sum
 from django.http import HttpResponse
@@ -8,6 +7,13 @@ from django.shortcuts import get_object_or_404, redirect
 from django_filters.rest_framework import DjangoFilterBackend
 from djoser.serializers import SetPasswordSerializer
 from djoser.views import UserViewSet
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.pagination import LimitOffsetPagination
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+
+from core.constants import MAX_LINK_LENGTH
 from recipes.models import (
     Follow,
     Ingredient,
@@ -16,12 +22,6 @@ from recipes.models import (
     RecipeShortLink,
     Tag,
 )
-from rest_framework import status, viewsets
-from rest_framework.decorators import action
-from rest_framework.pagination import LimitOffsetPagination
-from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.response import Response
-
 from .filters import IngredientFilter, RecipeFilter
 from .permissions import IsAuthorAdminOrReadOnly
 from .serializers import (
@@ -37,6 +37,7 @@ from .serializers import (
     SubscribedUserSerializer,
     TagSerializer,
 )
+
 
 User = get_user_model()
 

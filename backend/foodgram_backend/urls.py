@@ -12,6 +12,7 @@ from api.views import (
     short_link_redirect,
 )
 
+
 router = routers.DefaultRouter()
 router.register(r'users', FoodgramUserViewSet, basename='user')
 router.register(r'tags', TagViewSet, basename='tag')
