@@ -12,7 +12,7 @@ services:
       - pg_data:/var/lib/postgresql/data
 
   backend:
-    build: ./backend/
+    image: dariakol/foodgram_backend
     env_file: .env
     container_name: foodgram-back
     depends_on:
@@ -23,16 +23,19 @@ services:
 
   frontend:
     env_file: .env
-    build: ./frontend/
+    image: dariakol/foodgram_frontend
     command: cp -r /app/build/. /app/static/
     container_name: foodgram-front
     volumes:
       - static:/app/static
   gateway:
-    build: ./nginx/
+    container_name: foodgram-proxy
+    image: dariakol/kittygram_gateway
     env_file: .env
+    depends_on:
+      - backend
     ports:
       - 8000:80
     volumes:
-      - static:/static
-      - media:/media
+      - static:/app/static
+      - media:/app/media
