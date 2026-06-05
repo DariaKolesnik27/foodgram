@@ -76,11 +76,6 @@ jobs:
       run: |
         cd frontend/
         npm install --legacy-peer-deps
-    
-    # - name: Add polyfill for missing global function
-    #   run: |
-    #     cd frontend/
-    #     'echo "global.clearImmediate = global.clearImmediate || (() => {});" > frontend/src/setupTests.js'
 
     - name: Test frontend
       run: |
