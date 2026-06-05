@@ -1,13 +1,7 @@
-import os
-import django
 import json
 import csv
 
 from recipes.models import Ingredient
-
-
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'foodgram.settings')
-django.setup()
 
 
 def load_from_json(filepath):
