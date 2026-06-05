@@ -1,7 +1,6 @@
-from django.db.models import Exists, OuterRef
 import django_filters as filters
+from django.db.models import Exists, OuterRef
 from django_filters import rest_framework
-
 from recipes.models import Ingredient, Recipe, RecipeFavorites
 
 
@@ -30,8 +29,7 @@ class RecipeFilter(rest_framework.FilterSet):
         if user.is_authenticated:
             subquery = Exists(
                 RecipeFavorites.objects.filter(
-                    recipe=OuterRef('pk'),
-                    favorites=user
+                    recipe=OuterRef('pk'), favorites=user
                 )
             )
             if value:
@@ -44,9 +42,9 @@ class RecipeFilter(rest_framework.FilterSet):
     def filter_is_in_shopping_cart(self, queryset, name, value):
         user = self.request.user
         if user.is_authenticated:
-            subquery = Exists(
-                user.shopping_cart_recipes.filter(pk=OuterRef('pk'))
-            )
+            subquery = Exists(user.shopping_cart_recipes.filter(
+                pk=OuterRef('pk')
+            ))
             if value:
                 return queryset.filter(subquery)
             return queryset.filter(~subquery)
@@ -60,10 +58,7 @@ class RecipeFilter(rest_framework.FilterSet):
 
 
 class IngredientFilter(rest_framework.FilterSet):
-    name = filters.CharFilter(
-        field_name='name',
-        lookup_expr='istartswith'
-    )
+    name = filters.CharFilter(field_name='name', lookup_expr='istartswith')
 
     class Meta:
         model = Ingredient

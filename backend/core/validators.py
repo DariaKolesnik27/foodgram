@@ -1,6 +1,5 @@
-from rest_framework import serializers
-
 from recipes.models import Ingredient, RecipeIngredient
+from rest_framework import serializers
 
 
 def ingredient_validation(ingredients, recipe):
@@ -27,9 +26,7 @@ def ingredient_validation(ingredients, recipe):
             )
         recipe_ingredients.append(
             RecipeIngredient(
-                ingredient=ingredient,
-                recipe=recipe,
-                amount=amount
+                ingredient=ingredient, recipe=recipe, amount=amount
             )
         )
     return recipe_ingredients

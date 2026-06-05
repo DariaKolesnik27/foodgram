@@ -1,38 +1,42 @@
 import uuid
 
+from core.constants import MAX_LINK_LENGTH
+from django.contrib.auth import get_user_model
 from django.db.models import Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django_filters.rest_framework import DjangoFilterBackend
-from django.contrib.auth import get_user_model
-from djoser.views import UserViewSet
 from djoser.serializers import SetPasswordSerializer
+from djoser.views import UserViewSet
+from recipes.models import (
+    Follow,
+    Ingredient,
+    Recipe,
+    RecipeFavorites,
+    RecipeShortLink,
+    Tag,
+)
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from core.constants import MAX_LINK_LENGTH
-from recipes.models import (
-    Follow, Ingredient, Recipe, RecipeFavorites, RecipeShortLink, Tag
-)
 from .filters import IngredientFilter, RecipeFilter
 from .permissions import IsAuthorAdminOrReadOnly
 from .serializers import (
     AvatarSerializer,
-    FoodgramReadUserSerializer,
-    FoodgramCreateUserSerializer,
     FollowSerializer,
+    FoodgramCreateUserSerializer,
+    FoodgramReadUserSerializer,
     IngredientSerializer,
     RecipeReadSerializer,
     RecipeWriteSerializer,
-    ShortRecipeSerializer,
     ShortLinkSerializer,
+    ShortRecipeSerializer,
     SubscribedUserSerializer,
     TagSerializer,
 )
-
 
 User = get_user_model()
 
@@ -43,6 +47,8 @@ def short_link_redirect(request, short_link):
 
 
 class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
+    """Вьюсет для работы с ингредиентами."""
+
     queryset = Ingredient.objects.all()
     serializer_class = IngredientSerializer
     filter_backends = (DjangoFilterBackend,)
@@ -51,12 +57,16 @@ class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class TagViewSet(viewsets.ReadOnlyModelViewSet):
+    """Вьюсет для работы с тегами."""
+
     queryset = Tag.objects.all()
     serializer_class = TagSerializer
     pagination_class = None
 
 
 class RecipeViewSet(viewsets.ModelViewSet):
+    """Вьюсет для работы с рецептами."""
+
     queryset = Recipe.objects.all()
     permission_classes = [IsAuthorAdminOrReadOnly]
     http_method_names = ['get', 'post', 'patch', 'delete']
@@ -64,12 +74,14 @@ class RecipeViewSet(viewsets.ModelViewSet):
     filterset_class = RecipeFilter
 
     def get_shopping_list(self, request):
-        ingredient_total = Recipe.objects.filter(
-            shopping_cart=request.user
-        ).values(
-            'recipe_ingredients__ingredient__name',
-            'recipe_ingredients__ingredient__measurement_unit'
-        ).annotate(total_amount=Sum('recipe_ingredients__amount'))
+        ingredient_total = (
+            Recipe.objects.filter(shopping_cart=request.user)
+            .values(
+                'recipe_ingredients__ingredient__name',
+                'recipe_ingredients__ingredient__measurement_unit',
+            )
+            .annotate(total_amount=Sum('recipe_ingredients__amount'))
+        )
         return ingredient_total
 
     @action(
@@ -85,8 +97,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
             defaults={'short_link': uuid.uuid4().hex[:MAX_LINK_LENGTH]}
         )
         serializer = ShortLinkSerializer(
-            short_link_obj,
-            context={'request': request}
+            short_link_obj, context={'request': request}
         )
         return Response(serializer.data)
 
@@ -94,7 +105,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
         detail=False,
         methods=['get'],
         permission_classes=[IsAuthenticated],
-        url_path='download_shopping_cart'
+        url_path='download_shopping_cart',
     )
     def download_shopping_cart(self, request):
         shopping_cart = self.get_shopping_list(request)
@@ -102,9 +113,9 @@ class RecipeViewSet(viewsets.ModelViewSet):
             return Response(status=status.HTTP_404_NOT_FOUND)
         ingredients = [
             (
-                f'{item["recipe_ingredients__ingredient__name"]} — '
-                f'{item["total_amount"]} '
-                f'{item["recipe_ingredients__ingredient__measurement_unit"]}'
+                f'{item['recipe_ingredients__ingredient__name']} — '
+                f'{item['total_amount']} '
+                f'{item['recipe_ingredients__ingredient__measurement_unit']}'
             )
             for item in shopping_cart
         ]
@@ -121,7 +132,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
         detail=True,
         methods=['post', 'delete'],
         permission_classes=[IsAuthenticated],
-        url_path='shopping_cart'
+        url_path='shopping_cart',
     )
     def shopping_cart(self, request, pk=None):
         recipe = get_object_or_404(Recipe, pk=pk)
@@ -147,7 +158,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
         detail=True,
         methods=['post', 'delete'],
         permission_classes=[IsAuthenticated],
-        url_path='favorite'
+        url_path='favorite',
     )
     def favorite(self, request, pk=None):
         recipe = get_object_or_404(Recipe, pk=pk)
@@ -166,13 +177,14 @@ class RecipeViewSet(viewsets.ModelViewSet):
         elif request.method == 'DELETE':
             try:
                 favorite = RecipeFavorites.objects.get(
-                    favorites=request.user, recipe=recipe)
+                    favorites=request.user, recipe=recipe
+                )
                 favorite.delete()
                 return Response(status=status.HTTP_204_NO_CONTENT)
             except RecipeFavorites.DoesNotExist:
                 return Response(
                     {'detail': 'Рецепт не в избранном'},
-                    status=status.HTTP_400_BAD_REQUEST
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
 
     def get_serializer_class(self):
@@ -185,6 +197,8 @@ class RecipeViewSet(viewsets.ModelViewSet):
 
 
 class FoodgramUserViewSet(UserViewSet):
+    """Вьюсет для работы с пользователями."""
+
     queryset = User.objects.all()
     http_method_names = ['get', 'post', 'put', 'delete']
     pagination_class = LimitOffsetPagination
@@ -206,14 +220,14 @@ class FoodgramUserViewSet(UserViewSet):
         detail=False,
         methods=['put', 'delete'],
         permission_classes=[IsAuthenticated],
-        url_path='me/avatar'
+        url_path='me/avatar',
     )
     def avatar(self, request):
         if request.method == 'PUT':
             if 'avatar' not in request.data:
                 return Response(
                     {'error': 'Поле avatar обязательно для загрузки'},
-                    status=status.HTTP_400_BAD_REQUEST
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
             serializer = AvatarSerializer(
                 instance=request.user,
@@ -238,7 +252,10 @@ class FoodgramUserViewSet(UserViewSet):
     )
     def subscriptions(self, request):
         followings = User.objects.filter(
-            follow__user=request.user).prefetch_related('created_recipes')
+            follow__user=request.user
+        ).prefetch_related(
+            'created_recipes'
+        )
         paginator = self.pagination_class()
         recipes_limit = request.query_params.get('recipes_limit')
         context = self.get_serializer_context()
@@ -268,15 +285,15 @@ class FoodgramUserViewSet(UserViewSet):
             context = self.get_serializer_context()
             context['recipes_limit'] = recipes_limit
             serializer = FollowSerializer(
-                data={'following': following.id},
-                context=context
+                data={'following': following.id}, context=context
             )
             serializer.is_valid(raise_exception=True)
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         elif request.method == 'DELETE':
             subscription = Follow.objects.filter(
-                user=request.user, following=following).first()
+                user=request.user, following=following
+            ).first()
             if subscription:
                 subscription.delete()
                 return Response(status=status.HTTP_204_NO_CONTENT)

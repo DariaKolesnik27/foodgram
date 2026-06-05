@@ -1,18 +1,21 @@
 import base64
 
-from django.contrib.auth import get_user_model
-from django.core.files.base import ContentFile
-from django.db import transaction
-from rest_framework import serializers
-from rest_framework.validators import UniqueTogetherValidator
-
 from core.constants import EMAIL_LENGTH, MAX_IMAGE_SIZE_MB, MAX_NAMES_LENGTH
 from core.mixins import AvatarMixin, ImageUrlMixin, SubscriptionMixin
 from core.validators import ingredient_validation, validate_tags
+from django.contrib.auth import get_user_model
+from django.core.files.base import ContentFile
+from django.db import transaction
 from recipes.models import (
-    Follow, Ingredient, Recipe, RecipeIngredient, RecipeShortLink, Tag
+    Follow,
+    Ingredient,
+    Recipe,
+    RecipeIngredient,
+    RecipeShortLink,
+    Tag,
 )
-
+from rest_framework import serializers
+from rest_framework.validators import UniqueTogetherValidator
 
 User = get_user_model()
 
@@ -51,7 +54,8 @@ class ShortRecipeSerializer(serializers.ModelSerializer, ImageUrlMixin):
     """Сериализатор для краткого отображения рецептов."""
 
     image = serializers.SerializerMethodField(
-        'get_image', read_only=True,
+        'get_image',
+        read_only=True,
     )
 
     class Meta:
@@ -100,21 +104,19 @@ class FoodgramCreateUserSerializer(serializers.ModelSerializer):
             'last_name',
             'password',
         )
-        extra_kwargs = {
-            'password': {'write_only': True}
-        }
+        extra_kwargs = {'password': {'write_only': True}}
 
     def validate(self, data):
         username = data.get('username')
         email = data.get('email')
         if User.objects.filter(email=email).exists():
-            raise serializers.ValidationError({
-                'email': 'Пользователь с такой почтой уже существует.'
-            })
+            raise serializers.ValidationError(
+                {'email': 'Пользователь с такой почтой уже существует.'}
+            )
         elif User.objects.filter(username=username).exists():
-            raise serializers.ValidationError({
-                'username': 'Пользователь с таким username уже существует.'
-            })
+            raise serializers.ValidationError(
+                {'username': 'Пользователь с таким username уже существует.'}
+            )
         return data
 
     def create(self, validated_data):
@@ -123,7 +125,7 @@ class FoodgramCreateUserSerializer(serializers.ModelSerializer):
             email=validated_data['email'],
             password=validated_data['password'],
             first_name=validated_data.get('first_name', ''),
-            last_name=validated_data.get('last_name', '')
+            last_name=validated_data.get('last_name', ''),
         )
         return user
 
@@ -168,9 +170,16 @@ class RecipeReadSerializer(serializers.ModelSerializer, ImageUrlMixin):
     class Meta:
         model = Recipe
         fields = (
-            'id', 'author', 'name', 'text', 'cooking_time',
-            'image', 'tags', 'ingredients',
-            'is_favorited', 'is_in_shopping_cart'
+            'id',
+            'author',
+            'name',
+            'text',
+            'cooking_time',
+            'image',
+            'tags',
+            'ingredients',
+            'is_favorited',
+            'is_in_shopping_cart',
         )
 
     def get_is_favorited(self, obj):
@@ -192,7 +201,7 @@ class RecipeReadSerializer(serializers.ModelSerializer, ImageUrlMixin):
                 'id': ri.ingredient.id,
                 'name': ri.ingredient.name,
                 'measurement_unit': ri.ingredient.measurement_unit,
-                'amount': ri.amount
+                'amount': ri.amount,
             }
             for ri in recipe_ingredients
         ]
@@ -208,9 +217,7 @@ class RecipeWriteSerializer(serializers.ModelSerializer):
         allow_empty=False,
     )
     ingredients = serializers.ListField(
-        child=serializers.DictField(
-            child=serializers.IntegerField()
-        ),
+        child=serializers.DictField(child=serializers.IntegerField()),
         allow_null=False,
         allow_empty=False,
     )
@@ -223,8 +230,13 @@ class RecipeWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Recipe
         fields = (
-            'name', 'text', 'cooking_time', 'tags',
-            'ingredients', 'image', 'author'
+            'name',
+            'text',
+            'cooking_time',
+            'tags',
+            'ingredients',
+            'image',
+            'author',
         )
 
     def create(self, validated_data):
@@ -260,9 +272,7 @@ class RecipeWriteSerializer(serializers.ModelSerializer):
                     'Поле "Ингредиенты" обязательно для заполнения'
                 )
             ingredients = validated_data.pop('ingredients')
-            recipe_ingredients = ingredient_validation(
-                ingredients, instance
-            )
+            recipe_ingredients = ingredient_validation(ingredients, instance)
             RecipeIngredient.objects.bulk_create(recipe_ingredients)
 
             if 'tags' not in validated_data:
@@ -296,8 +306,15 @@ class SubscribedUserSerializer(
     class Meta:
         model = User
         fields = [
-            'id', 'email', 'username', 'first_name', 'last_name', 'avatar',
-            'is_subscribed', 'recipes', 'recipes_count'
+            'id',
+            'email',
+            'username',
+            'first_name',
+            'last_name',
+            'avatar',
+            'is_subscribed',
+            'recipes',
+            'recipes_count',
         ]
 
     def get_recipes(self, obj):
@@ -328,8 +345,7 @@ class FollowSerializer(serializers.ModelSerializer):
         fields = '__all__'
         validators = [
             UniqueTogetherValidator(
-                queryset=Follow.objects.all(),
-                fields=['user', 'following']
+                queryset=Follow.objects.all(), fields=['user', 'following']
             )
         ]
 

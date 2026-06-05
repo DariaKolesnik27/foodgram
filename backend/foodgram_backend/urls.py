@@ -5,11 +5,11 @@ from django.urls import include, path
 from rest_framework import routers
 
 from api.views import (
+    FoodgramUserViewSet,
     IngredientViewSet,
     RecipeViewSet,
     TagViewSet,
-    FoodgramUserViewSet,
-    short_link_redirect
+    short_link_redirect,
 )
 
 router = routers.DefaultRouter()
@@ -22,9 +22,10 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
     path('api/auth/', include('djoser.urls.authtoken')),
-    path('s/<str:short_link>/', short_link_redirect)
+    path('s/<str:short_link>/', short_link_redirect),
 ]
 
 if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL,
-                          document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(
+        settings.MEDIA_URL, document_root=settings.MEDIA_ROOT
+    )

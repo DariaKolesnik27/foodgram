@@ -5,13 +5,12 @@ from django.db import models
 
 from core.constants import (
     MAX_LINK_LENGTH,
-    MAX_TAGS_LENGTH,
-    MAX_SLUG_LENGTH,
     MAX_RECIPE_NAMES_LENGTH,
+    MAX_SLUG_LENGTH,
+    MAX_TAGS_LENGTH,
     MAX_UNIT_LENGTH,
-    TEXT_WIDTH
+    TEXT_WIDTH,
 )
-
 
 User = get_user_model()
 
@@ -30,13 +29,12 @@ class TagIngredientAbstractModel(models.Model):
         ordering = ('name',)
 
     def __str__(self):
-        return textwrap.shorten(
-            self.name, width=TEXT_WIDTH, placeholder='...'
-        )
+        return textwrap.shorten(self.name, width=TEXT_WIDTH, placeholder='...')
 
 
 class Tag(TagIngredientAbstractModel):
     """Модель тега."""
+
     slug = models.SlugField(
         max_length=MAX_SLUG_LENGTH,
         unique=True,
@@ -50,9 +48,9 @@ class Tag(TagIngredientAbstractModel):
 
 class Ingredient(TagIngredientAbstractModel):
     """Модель ингредиента."""
+
     measurement_unit = models.CharField(
-        max_length=MAX_UNIT_LENGTH,
-        verbose_name='Единица измерения'
+        max_length=MAX_UNIT_LENGTH, verbose_name='Единица измерения'
     )
 
     class Meta(TagIngredientAbstractModel.Meta):
@@ -62,21 +60,21 @@ class Ingredient(TagIngredientAbstractModel):
 
 class Recipe(models.Model):
     """Модель рецепта."""
+
     author = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         related_name='created_recipes',
-        verbose_name='Автор'
+        verbose_name='Автор',
     )
     name = models.CharField(
         max_length=MAX_RECIPE_NAMES_LENGTH,
         verbose_name='Название',
     )
-    image = models.ImageField(
-        upload_to='recipes/',
-        verbose_name='Картинка'
+    image = models.ImageField(upload_to='recipes/', verbose_name='Картинка')
+    text = models.TextField(
+        verbose_name='Описание',
     )
-    text = models.TextField(verbose_name='Описание',)
     tags = models.ManyToManyField(
         Tag,
         related_name='recipes',
@@ -89,19 +87,17 @@ class Recipe(models.Model):
         Ingredient,
         through='RecipeIngredient',
         related_name='recipes',
-        verbose_name='Ингредиенты'
+        verbose_name='Ингредиенты',
     )
     favorites = models.ManyToManyField(
         User,
         through='RecipeFavorites',
         related_name='favorite_recipes',
         verbose_name='Избранное',
-        blank=True
+        blank=True,
     )
     shopping_cart = models.ManyToManyField(
-        User,
-        related_name='shopping_cart_recipes',
-        blank=True
+        User, related_name='shopping_cart_recipes', blank=True
     )
     created_at = models.DateTimeField(
         auto_now_add=True,
@@ -114,9 +110,7 @@ class Recipe(models.Model):
         ordering = ('-created_at',)
 
     def __str__(self):
-        return textwrap.shorten(
-            self.name, width=TEXT_WIDTH, placeholder='...'
-        )
+        return textwrap.shorten(self.name, width=TEXT_WIDTH, placeholder='...')
 
 
 class RecipeIngredient(models.Model):
@@ -126,14 +120,10 @@ class RecipeIngredient(models.Model):
     """
 
     recipe = models.ForeignKey(
-        Recipe,
-        on_delete=models.CASCADE,
-        related_name='recipe_ingredients'
+        Recipe, on_delete=models.CASCADE, related_name='recipe_ingredients'
     )
     ingredient = models.ForeignKey(
-        Ingredient,
-        on_delete=models.CASCADE,
-        related_name='ingredient_recipes'
+        Ingredient, on_delete=models.CASCADE, related_name='ingredient_recipes'
     )
     amount = models.PositiveSmallIntegerField(
         verbose_name='Количество',
@@ -153,28 +143,25 @@ class RecipeIngredient(models.Model):
 
 class RecipeFavorites(models.Model):
     """Промежуточная модель рецептов, добавленных в избранное."""
+
     recipe = models.ForeignKey(
-        Recipe,
-        on_delete=models.CASCADE,
-        related_name='recipe_favorites'
+        Recipe, on_delete=models.CASCADE, related_name='recipe_favorites'
     )
     favorites = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name='favorites_recipe'
+        User, on_delete=models.CASCADE, related_name='favorites_recipe'
     )
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=['recipe', 'favorites'],
-                name='unique_favorites'
+                fields=['recipe', 'favorites'], name='unique_favorites'
             ),
         ]
 
 
 class Follow(models.Model):
     """Модель подписки пользователя на другого пользователя."""
+
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -194,23 +181,22 @@ class Follow(models.Model):
             ),
             models.CheckConstraint(
                 condition=~models.Q(user=models.F('following')),
-                name='cant_follow_to_yourself'
+                name='cant_follow_to_yourself',
             ),
         ]
 
 
 class RecipeShortLink(models.Model):
     """Модель коротких ссылок на рецепты."""
+
     recipe = models.OneToOneField(
         Recipe,
         on_delete=models.CASCADE,
         related_name='short_link',
-        verbose_name='Рецепт'
+        verbose_name='Рецепт',
     )
     short_link = models.CharField(
-        max_length=MAX_LINK_LENGTH,
-        unique=True,
-        verbose_name='Короткая ссылка'
+        max_length=MAX_LINK_LENGTH, unique=True, verbose_name='Короткая ссылка'
     )
 
     class Meta:
