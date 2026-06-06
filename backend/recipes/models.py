@@ -16,47 +16,48 @@ from core.constants import (
 User = get_user_model()
 
 
-class TagIngredientAbstractModel(models.Model):
-    """Абстрактная модель."""
+class Tag(models.Model):
+    """Модель тега."""
 
     name = models.CharField(
         unique=True,
         max_length=MAX_TAGS_LENGTH,
         verbose_name='Название',
     )
-
-    class Meta:
-        abstract = True
-        ordering = ('name',)
-
-    def __str__(self):
-        return textwrap.shorten(self.name, width=TEXT_WIDTH, placeholder='...')
-
-
-class Tag(TagIngredientAbstractModel):
-    """Модель тега."""
-
     slug = models.SlugField(
         max_length=MAX_SLUG_LENGTH,
         unique=True,
         verbose_name='Слаг',
     )
 
-    class Meta(TagIngredientAbstractModel.Meta):
+    class Meta:
         verbose_name = 'Тег'
         verbose_name_plural = 'Теги'
+        ordering = ('name',)
+
+    def __str__(self):
+        return textwrap.shorten(self.name, width=TEXT_WIDTH, placeholder='...')
 
 
-class Ingredient(TagIngredientAbstractModel):
+class Ingredient(models.Model):
     """Модель ингредиента."""
 
+    name = models.CharField(
+        unique=True,
+        max_length=MAX_RECIPE_NAMES_LENGTH,
+        verbose_name='Название',
+    )
     measurement_unit = models.CharField(
         max_length=MAX_UNIT_LENGTH, verbose_name='Единица измерения'
     )
 
-    class Meta(TagIngredientAbstractModel.Meta):
+    class Meta:
         verbose_name = 'Ингредиент'
         verbose_name_plural = 'Ингредиенты'
+        ordering = ('name',)
+
+    def __str__(self):
+        return textwrap.shorten(self.name, width=TEXT_WIDTH, placeholder='...')
 
 
 class Recipe(models.Model):
