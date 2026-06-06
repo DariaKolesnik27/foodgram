@@ -28,9 +28,9 @@ class Command(BaseCommand):
                             )
                             if created:
                                 count += 1
-            print(f"[CSV] Успешно обработано: {count} записей.")
+            print(f'Успешно обработано: {count} записей.')
             self.stdout.write('Ingredient импортированы')
         except FileNotFoundError:
-            print(f"[CSV] Файл не найден: {path}")
+            print(f'[CSV] Файл не найден: {path}')
         except Exception as e:
-            print(f"[CSV] Ошибка: {e}")
+            print(f'[CSV] Ошибка: {e}')
