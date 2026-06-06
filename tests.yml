@@ -1,0 +1,5 @@
+login: admin
+password: 123456
+email: admin@mail.ru
+vm_name: 81.26.180.49
+foodgram_domain: https://foxkitchen.ddns.net/

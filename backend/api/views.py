@@ -114,9 +114,9 @@ class RecipeViewSet(viewsets.ModelViewSet):
             return Response(status=status.HTTP_404_NOT_FOUND)
         ingredients = [
             (
-                f'{item['recipe_ingredients__ingredient__name']} — '
-                f'{item['total_amount']} '
-                f'{item['recipe_ingredients__ingredient__measurement_unit']}'
+                f"{item['recipe_ingredients__ingredient__name']} — "
+                f"{item['total_amount']} "
+                f"{item['recipe_ingredients__ingredient__measurement_unit']}"
             )
             for item in shopping_cart
         ]
