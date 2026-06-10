@@ -78,7 +78,7 @@ class IngredientSerializer(serializers.ModelSerializer):
         fields = ('id', 'name', 'measurement_unit')
 
 
-class FoodgramReadUserSerializer(
+class FoodgramUserSerializer(
     AvatarMixin, SubscriptionMixin, serializers.ModelSerializer
 ):
     """Сериализатор для модели FoodgramUser."""
@@ -128,9 +128,11 @@ class RecipeReadSerializer(serializers.ModelSerializer, ImageUrlMixin):
     ingredients = RecipeIngredientSerializer(
         source='recipe_ingredients', many=True, read_only=True
     )
-    is_favorited = serializers.SerializerMethodField()
-    is_in_shopping_cart = serializers.SerializerMethodField()
-    author = FoodgramReadUserSerializer()
+    is_favorited = serializers.BooleanField(read_only=True, default=False)
+    is_in_shopping_cart = serializers.BooleanField(
+        read_only=True, default=False
+    )
+    author = FoodgramUserSerializer()
 
     class Meta:
         model = Recipe
@@ -146,22 +148,6 @@ class RecipeReadSerializer(serializers.ModelSerializer, ImageUrlMixin):
             'is_favorited',
             'is_in_shopping_cart',
         )
-
-    def get_is_favorited(self, obj):
-        request = self.context.get('request')
-        if not request:
-            return False
-        if not request.user.is_authenticated:
-            return False
-        return obj.favorites.filter(pk=request.user.pk).exists()
-
-    def get_is_in_shopping_cart(self, obj):
-        request = self.context.get('request')
-        if not request:
-            return False
-        if not request.user.is_authenticated:
-            return False
-        return obj.carts.filter(user__pk=request.user.pk).exists()
 
 
 class RecipeWriteSerializer(serializers.ModelSerializer):
@@ -226,7 +212,7 @@ class RecipeWriteSerializer(serializers.ModelSerializer):
         return RecipeReadSerializer(instance, context=self.context).data
 
 
-class SubscribedUserSerializer(FoodgramReadUserSerializer):
+class SubscribedUserSerializer(FoodgramUserSerializer):
     """Сериализатор для получения подписок пользователя."""
 
     recipes = serializers.SerializerMethodField('get_recipes')

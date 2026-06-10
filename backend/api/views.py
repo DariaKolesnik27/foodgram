@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from django.db.models import Sum
+from django.db.models import Exists, OuterRef, Sum, Value
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
@@ -65,6 +65,31 @@ class RecipeViewSet(viewsets.ModelViewSet):
     http_method_names = ['get', 'post', 'patch', 'delete']
     filter_backends = [DjangoFilterBackend]
     filterset_class = RecipeFilter
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        if user.is_authenticated:
+            is_favorited_subquery = Exists(
+                RecipeFavorites.objects.filter(
+                    recipe=OuterRef('pk'),
+                    favorites=user
+                )
+            )
+            is_in_cart_subquery = Exists(
+                ShoppingCart.objects.filter(
+                    recipe=OuterRef('pk'),
+                    user=user
+                )
+            )
+        else:
+            is_favorited_subquery = Value(False)
+            is_in_cart_subquery = Value(False)
+
+        return queryset.annotate(
+            is_favorited=is_favorited_subquery,
+            is_in_shopping_cart=is_in_cart_subquery
+        )
 
     def get_shopping_list(self, request):
         ingredient_total = (
