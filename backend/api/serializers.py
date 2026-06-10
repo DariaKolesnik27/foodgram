@@ -4,17 +4,14 @@ from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.db import transaction
 from rest_framework import serializers
-from rest_framework.validators import UniqueTogetherValidator
 
-from core.constants import EMAIL_LENGTH, MAX_IMAGE_SIZE_MB, MAX_NAMES_LENGTH
+from core.constants import MAX_IMAGE_SIZE_MB
 from core.mixins import AvatarMixin, ImageUrlMixin, SubscriptionMixin
-from core.validators import ingredient_validation, validate_tags
+from core.validators import prepare_ingredients_list, get_unique_tags
 from recipes.models import (
-    Follow,
     Ingredient,
     Recipe,
     RecipeIngredient,
-    RecipeShortLink,
     Tag,
 )
 
@@ -52,7 +49,7 @@ class AvatarSerializer(serializers.ModelSerializer):
         fields = ('avatar',)
 
 
-class ShortRecipeSerializer(serializers.ModelSerializer, ImageUrlMixin):
+class ShortRecipeSerializer(ImageUrlMixin, serializers.ModelSerializer):
     """Сериализатор для краткого отображения рецептов."""
 
     image = serializers.SerializerMethodField(
@@ -81,61 +78,10 @@ class IngredientSerializer(serializers.ModelSerializer):
         fields = ('id', 'name', 'measurement_unit')
 
 
-class FoodgramCreateUserSerializer(serializers.ModelSerializer):
-    """Сериализатор для POST/PATCH-запросов модели FoodgramUser."""
-
-    email = serializers.EmailField(max_length=EMAIL_LENGTH, required=True)
-    username = serializers.CharField(
-        max_length=MAX_NAMES_LENGTH,
-        required=True,
-    )
-    first_name = serializers.CharField(
-        max_length=MAX_NAMES_LENGTH, required=True
-    )
-    last_name = serializers.CharField(
-        max_length=MAX_NAMES_LENGTH, required=True
-    )
-
-    class Meta:
-        model = User
-        fields = (
-            'id',
-            'username',
-            'email',
-            'first_name',
-            'last_name',
-            'password',
-        )
-        extra_kwargs = {'password': {'write_only': True}}
-
-    def validate(self, data):
-        username = data.get('username')
-        email = data.get('email')
-        if User.objects.filter(email=email).exists():
-            raise serializers.ValidationError(
-                {'email': 'Пользователь с такой почтой уже существует.'}
-            )
-        elif User.objects.filter(username=username).exists():
-            raise serializers.ValidationError(
-                {'username': 'Пользователь с таким username уже существует.'}
-            )
-        return data
-
-    def create(self, validated_data):
-        user = User.objects.create_user(
-            username=validated_data['username'],
-            email=validated_data['email'],
-            password=validated_data['password'],
-            first_name=validated_data.get('first_name', ''),
-            last_name=validated_data.get('last_name', ''),
-        )
-        return user
-
-
 class FoodgramReadUserSerializer(
-    serializers.ModelSerializer, AvatarMixin, SubscriptionMixin
+    AvatarMixin, SubscriptionMixin, serializers.ModelSerializer
 ):
-    """Сериализатор для  GET-запросов модели FoodgramUser."""
+    """Сериализатор для модели FoodgramUser."""
 
     is_subscribed = serializers.SerializerMethodField()
     avatar = serializers.SerializerMethodField(
@@ -156,6 +102,21 @@ class FoodgramReadUserSerializer(
         )
 
 
+class RecipeIngredientSerializer(serializers.Serializer):
+    name = serializers.CharField(source='ingredient.name', read_only=True)
+    measurement_unit = serializers.CharField(
+        source='ingredient.measurement_unit', read_only=True
+    )
+    amount = serializers.IntegerField(min_value=1)
+    id = serializers.PrimaryKeyRelatedField(
+        queryset=Ingredient.objects.all(), source='ingredient'
+    )
+
+    class Meta:
+        model = RecipeIngredient
+        fields = ('id', 'name', 'measurement_unit', 'amount')
+
+
 class RecipeReadSerializer(serializers.ModelSerializer, ImageUrlMixin):
     """Сериализатор для GET-запросов модели Recipe."""
 
@@ -164,7 +125,9 @@ class RecipeReadSerializer(serializers.ModelSerializer, ImageUrlMixin):
         read_only=True,
     )
     tags = TagSerializer(many=True)
-    ingredients = serializers.SerializerMethodField('get_ingredients')
+    ingredients = RecipeIngredientSerializer(
+        source='recipe_ingredients', many=True, read_only=True
+    )
     is_favorited = serializers.SerializerMethodField()
     is_in_shopping_cart = serializers.SerializerMethodField()
     author = FoodgramReadUserSerializer()
@@ -185,28 +148,20 @@ class RecipeReadSerializer(serializers.ModelSerializer, ImageUrlMixin):
         )
 
     def get_is_favorited(self, obj):
-        user = self.context['request'].user
-        if user.is_authenticated:
-            return obj.favorites.filter(pk=user.pk).exists()
-        return False
+        request = self.context.get('request')
+        if not request:
+            return False
+        if not request.user.is_authenticated:
+            return False
+        return obj.favorites.filter(pk=request.user.pk).exists()
 
     def get_is_in_shopping_cart(self, obj):
-        user = self.context['request'].user
-        if user.is_authenticated:
-            return obj.shopping_cart.filter(pk=user.pk).exists()
-        return False
-
-    def get_ingredients(self, obj):
-        recipe_ingredients = obj.recipe_ingredients.all()
-        return [
-            {
-                'id': ri.ingredient.id,
-                'name': ri.ingredient.name,
-                'measurement_unit': ri.ingredient.measurement_unit,
-                'amount': ri.amount,
-            }
-            for ri in recipe_ingredients
-        ]
+        request = self.context.get('request')
+        if not request:
+            return False
+        if not request.user.is_authenticated:
+            return False
+        return obj.carts.filter(user__pk=request.user.pk).exists()
 
 
 class RecipeWriteSerializer(serializers.ModelSerializer):
@@ -218,13 +173,8 @@ class RecipeWriteSerializer(serializers.ModelSerializer):
         allow_null=False,
         allow_empty=False,
     )
-    ingredients = serializers.ListField(
-        child=serializers.DictField(child=serializers.IntegerField()),
-        allow_null=False,
-        allow_empty=False,
-    )
+    ingredients = RecipeIngredientSerializer(many=True)
     image = Base64ImageField(required=True)
-    cooking_time = serializers.IntegerField(min_value=1)
     author = serializers.HiddenField(
         default=serializers.CurrentUserDefault(),
     )
@@ -241,73 +191,50 @@ class RecipeWriteSerializer(serializers.ModelSerializer):
             'author',
         )
 
+    @transaction.atomic
     def create(self, validated_data):
-        if (
-            'ingredients' not in self.initial_data
-            or 'tags' not in self.initial_data
-        ):
-            raise serializers.ValidationError(
-                'Заполните все обязательные поля'
-            )
         ingredients = validated_data.pop('ingredients')
         tags = validated_data.pop('tags')
-        unique_tags = validate_tags(tags)
-        with transaction.atomic():
-            recipe = Recipe.objects.create(**validated_data)
-            recipe_ingredients = ingredient_validation(ingredients, recipe)
-            RecipeIngredient.objects.bulk_create(recipe_ingredients)
-            recipe.tags.set(unique_tags)
-            return recipe
+        unique_tags = get_unique_tags(tags)
+        validated_data['author'] = self.context['request'].user
+        recipe = Recipe.objects.create(**validated_data)
+        recipe_ingredients = prepare_ingredients_list(ingredients, recipe)
+        RecipeIngredient.objects.bulk_create(recipe_ingredients)
+        recipe.tags.set(unique_tags)
+        return recipe
 
+    @transaction.atomic
     def update(self, instance, validated_data):
-        with transaction.atomic():
-            instance.name = validated_data.get('name', instance.name)
-            instance.text = validated_data.get('text', instance.text)
-            instance.cooking_time = validated_data.get(
-                'cooking_time', instance.cooking_time
-            )
-            instance.image = validated_data.get('image', instance.image)
-            instance.recipe_ingredients.all().delete()
-
-            if 'ingredients' not in validated_data:
-                raise serializers.ValidationError(
-                    'Поле "Ингредиенты" обязательно для заполнения'
-                )
-            ingredients = validated_data.pop('ingredients')
-            recipe_ingredients = ingredient_validation(ingredients, instance)
-            RecipeIngredient.objects.bulk_create(recipe_ingredients)
-
-            if 'tags' not in validated_data:
-                raise serializers.ValidationError(
-                    'Поле "Теги" обязательно для заполнения'
-                )
-            tags = validated_data.pop('tags')
-            unique_tags = validate_tags(tags)
-            instance.tags.set(unique_tags)
-
-            instance.save()
-            return instance
+        ingredients = validated_data.pop('ingredients', None)
+        tags = validated_data.pop('tags', None)
+        instance = super().update(instance, validated_data)
+        if not tags:
+            raise serializers.ValidationError('Поле "Теги" обязательно')
+        unique_tags = get_unique_tags(tags)
+        instance.tags.clear()
+        instance.tags.set(unique_tags)
+        if not ingredients:
+            raise serializers.ValidationError('Поле "Ингредиенты" обязательно')
+        recipe_ingredients = prepare_ingredients_list(
+            ingredients, instance
+        )
+        instance.recipe_ingredients.all().delete()
+        RecipeIngredient.objects.bulk_create(recipe_ingredients)
+        return instance
 
     def to_representation(self, instance):
         return RecipeReadSerializer(instance, context=self.context).data
 
 
-class SubscribedUserSerializer(
-    serializers.ModelSerializer, AvatarMixin, SubscriptionMixin
-):
+class SubscribedUserSerializer(FoodgramReadUserSerializer):
     """Сериализатор для получения подписок пользователя."""
 
     recipes = serializers.SerializerMethodField('get_recipes')
     recipes_count = serializers.SerializerMethodField('get_recipes_count')
-    is_subscribed = serializers.SerializerMethodField('get_is_subscribed')
-    avatar = serializers.SerializerMethodField(
-        'get_avatar',
-        read_only=True,
-    )
 
     class Meta:
         model = User
-        fields = [
+        fields = (
             'id',
             'email',
             'username',
@@ -317,7 +244,7 @@ class SubscribedUserSerializer(
             'is_subscribed',
             'recipes',
             'recipes_count',
-        ]
+        )
 
     def get_recipes(self, obj):
         limit = self.context['recipes_limit']
@@ -330,50 +257,3 @@ class SubscribedUserSerializer(
 
     def get_recipes_count(self, obj):
         return obj.created_recipes.count()
-
-
-class FollowSerializer(serializers.ModelSerializer):
-    """Сериализатор для POST-запросов модели Follow."""
-
-    user = serializers.HiddenField(
-        default=serializers.CurrentUserDefault(),
-    )
-    following = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(),
-    )
-
-    class Meta:
-        model = Follow
-        fields = '__all__'
-        validators = [
-            UniqueTogetherValidator(
-                queryset=Follow.objects.all(), fields=['user', 'following']
-            )
-        ]
-
-    def validate_following(self, value):
-        request_user = self.context['request'].user
-        if request_user == value:
-            raise serializers.ValidationError(
-                'Нельзя подписаться на самого себя.'
-            )
-
-        return value
-
-    def to_representation(self, instance):
-        return SubscribedUserSerializer(
-            instance.following, context=self.context
-        ).data
-
-
-class ShortLinkSerializer(serializers.ModelSerializer):
-    """Сериализатор для GET-запросов модели RecipeShortLink."""
-
-    class Meta:
-        model = RecipeShortLink
-        fields = ('short_link',)
-
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        data['short-link'] = data.pop('short_link')
-        return data

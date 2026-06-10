@@ -13,24 +13,32 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         try:
             path = self.data_dir / 'ingredients.csv'
-            count = 0
             with open(path, encoding='utf-8') as f:
                 reader = csv.reader(f)
+                ingredients = []
                 for row in reader:
                     if len(row) >= 2:
                         name = row[0].strip()
                         unit = row[1].strip()
 
                         if name and unit:
-                            obj, created = Ingredient.objects.get_or_create(
+                            ingredients.append(Ingredient(
                                 name=name,
                                 measurement_unit=unit
-                            )
-                            if created:
-                                count += 1
-            print(f'Успешно обработано: {count} записей.')
+                            ))
+                created_ingredients = Ingredient.objects.bulk_create(
+                    ingredients, ignore_conflicts=True
+                )
+                count = len(created_ingredients)
+            self.stdout.write(
+                self.style.SUCCESS(f'Успешно обработано: {count} записей.')
+            )
             self.stdout.write('Ingredient импортированы')
         except FileNotFoundError:
-            print(f'[CSV] Файл не найден: {path}')
+            self.stdout.write(
+                self.style.ERROR(f'[CSV] Файл не найден: {path}')
+            )
         except Exception as e:
-            print(f'[CSV] Ошибка: {e}')
+            self.stdout.write(
+                self.style.ERROR(f'[CSV] Ошибка: {e}')
+            )

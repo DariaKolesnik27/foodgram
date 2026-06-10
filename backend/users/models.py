@@ -25,7 +25,7 @@ class FoodgramUser(AbstractUser):
     )
     avatar = models.ImageField(upload_to='users/', verbose_name='Аватар')
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['username']
+    REQUIRED_FIELDS = ['username', 'first_name', 'last_name']
 
     class Meta:
         verbose_name = 'Пользователь'
@@ -34,3 +34,30 @@ class FoodgramUser(AbstractUser):
 
     def __str__(self):
         return self.username
+
+
+class Follow(models.Model):
+    """Модель подписки пользователя на другого пользователя."""
+
+    user = models.ForeignKey(
+        FoodgramUser,
+        on_delete=models.CASCADE,
+        related_name='follow',
+    )
+    following = models.ForeignKey(
+        FoodgramUser,
+        on_delete=models.CASCADE,
+        related_name='follows',
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'following'],
+                name='unique_follow'
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(user=models.F('following')),
+                name='cant_follow_to_yourself',
+            ),
+        ]

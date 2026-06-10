@@ -1,6 +1,8 @@
 import textwrap
+import uuid
 
 from django.contrib.auth import get_user_model
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 from core.constants import (
@@ -43,7 +45,6 @@ class Ingredient(models.Model):
     """Модель ингредиента."""
 
     name = models.CharField(
-        unique=True,
         max_length=MAX_RECIPE_NAMES_LENGTH,
         verbose_name='Название',
     )
@@ -55,6 +56,7 @@ class Ingredient(models.Model):
         verbose_name = 'Ингредиент'
         verbose_name_plural = 'Ингредиенты'
         ordering = ('name',)
+        unique_together = ('name', 'measurement_unit')
 
     def __str__(self):
         return textwrap.shorten(self.name, width=TEXT_WIDTH, placeholder='...')
@@ -84,12 +86,22 @@ class Recipe(models.Model):
     )
     cooking_time = models.PositiveSmallIntegerField(
         verbose_name='Время приготовления',
+        validators=[
+            MinValueValidator(1),
+            MaxValueValidator(32767)
+        ]
     )
     ingredients = models.ManyToManyField(
         Ingredient,
         through='RecipeIngredient',
         related_name='recipes',
         verbose_name='Ингредиенты',
+    )
+    shopping_cart = models.ManyToManyField(
+        User,
+        through='ShoppingCart',
+        related_name='cart_items',
+        verbose_name='Корзина'
     )
     favorites = models.ManyToManyField(
         User,
@@ -98,12 +110,16 @@ class Recipe(models.Model):
         verbose_name='Избранное',
         blank=True,
     )
-    shopping_cart = models.ManyToManyField(
-        User, related_name='shopping_cart_recipes', blank=True
-    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name='Добавлено'
+    )
+    short_link = models.CharField(
+        max_length=MAX_LINK_LENGTH,
+        unique=True,
+        blank=True,
+        null=False,
+        verbose_name='Короткая ссылка'
     )
 
     class Meta:
@@ -111,8 +127,36 @@ class Recipe(models.Model):
         verbose_name_plural = 'Рецепты'
         ordering = ('-created_at',)
 
+    def save(self, *args, **kwargs):
+        if not self.short_link and not self.pk:
+            while True:
+                link = uuid.uuid4().hex[:MAX_LINK_LENGTH]
+                if not Recipe.objects.filter(short_link=link).exists():
+                    self.short_link = link
+                    break
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return textwrap.shorten(self.name, width=TEXT_WIDTH, placeholder='...')
+
+
+class ShoppingCart(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='user_cart'
+    )
+    recipe = models.ForeignKey(
+        Recipe,
+        on_delete=models.CASCADE,
+        related_name='carts',
+        blank=True
+    )
+
+    class Meta:
+        verbose_name = 'Корзина'
+        verbose_name_plural = 'Корзины'
+        unique_together = ('recipe', 'user')
 
 
 class RecipeIngredient(models.Model):
@@ -159,51 +203,3 @@ class RecipeFavorites(models.Model):
                 fields=['recipe', 'favorites'], name='unique_favorites'
             ),
         ]
-
-
-class Follow(models.Model):
-    """Модель подписки пользователя на другого пользователя."""
-
-    user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name='follow',
-    )
-    following = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name='follows',
-    )
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=['user', 'following'],
-                name='unique_follow'
-            ),
-            models.CheckConstraint(
-                condition=~models.Q(user=models.F('following')),
-                name='cant_follow_to_yourself',
-            ),
-        ]
-
-
-class RecipeShortLink(models.Model):
-    """Модель коротких ссылок на рецепты."""
-
-    recipe = models.OneToOneField(
-        Recipe,
-        on_delete=models.CASCADE,
-        related_name='short_link',
-        verbose_name='Рецепт',
-    )
-    short_link = models.CharField(
-        max_length=MAX_LINK_LENGTH, unique=True, verbose_name='Короткая ссылка'
-    )
-
-    class Meta:
-        verbose_name = 'Короткая ссылка'
-        verbose_name_plural = 'Короткие ссылки'
-
-    def __str__(self):
-        return f'Короткая ссылка для рецепта - {self.recipe.name}'

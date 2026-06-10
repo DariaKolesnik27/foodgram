@@ -1,4 +1,4 @@
-from recipes.models import Follow
+from users.models import Follow
 
 
 class AvatarMixin:
@@ -18,6 +18,8 @@ class ImageUrlMixin:
 class SubscriptionMixin:
     def get_is_subscribed(self, obj):
         request = self.context.get('request')
-        if not request or not request.user.is_authenticated:
+        if not request:
+            return False
+        if not request.user.is_authenticated:
             return False
         return Follow.objects.filter(user=request.user, following=obj).exists()
