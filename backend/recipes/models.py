@@ -4,6 +4,7 @@ import uuid
 from django.contrib.auth import get_user_model
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.db.models import Exists, OuterRef, Value
 
 from core.constants import (
     MAX_LINK_LENGTH,
@@ -11,6 +12,8 @@ from core.constants import (
     MAX_SLUG_LENGTH,
     MAX_TAGS_LENGTH,
     MAX_UNIT_LENGTH,
+    MAX_VALUE,
+    MIN_VALUE,
     TEXT_WIDTH,
 )
 
@@ -62,9 +65,70 @@ class Ingredient(models.Model):
         return textwrap.shorten(self.name, width=TEXT_WIDTH, placeholder='...')
 
 
+class ShoppingCartFavoritesAbstractModel(models.Model):
+    """Абстрактная модель для корзины и избранного."""
+
+    recipe = models.ForeignKey(
+        'Recipe',
+        on_delete=models.CASCADE,
+        related_name='%(model_name)s_recipes'
+    )
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='%(model_name)s_users'
+    )
+
+    class Meta:
+        abstract = True
+        constraints = [
+            models.UniqueConstraint(
+                fields=['recipe', 'user'], name='unique_%(model_name)s'
+            ),
+        ]
+
+
+class ShoppingCart(ShoppingCartFavoritesAbstractModel):
+
+    class Meta:
+        verbose_name = 'Корзина'
+        verbose_name_plural = 'Корзины'
+
+
+class RecipeFavorites(ShoppingCartFavoritesAbstractModel):
+    """Промежуточная модель рецептов, добавленных в избранное."""
+
+    class Meta:
+        verbose_name = 'Избранное'
+        verbose_name_plural = 'Избранные'
+
+
+class RecipeQuerySet(models.QuerySet):
+    def in_collection(self, user):
+        if user and user.is_authenticated:
+            is_favorited_subquery = Exists(
+                RecipeFavorites.objects.filter(
+                    recipe=OuterRef('pk'),
+                    user=user
+                )
+            )
+            is_in_cart_subquery = Exists(
+                ShoppingCart.objects.filter(
+                    recipe=OuterRef('pk'),
+                    user=user
+                )
+            )
+        else:
+            is_favorited_subquery = Value(False)
+            is_in_cart_subquery = Value(False)
+        return self.annotate(
+            is_favorited=is_favorited_subquery,
+            is_in_shopping_cart=is_in_cart_subquery
+        )
+
+
 class Recipe(models.Model):
     """Модель рецепта."""
 
+    objects = RecipeQuerySet.as_manager()
     author = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -87,8 +151,8 @@ class Recipe(models.Model):
     cooking_time = models.PositiveSmallIntegerField(
         verbose_name='Время приготовления',
         validators=[
-            MinValueValidator(1),
-            MaxValueValidator(32767)
+            MinValueValidator(MIN_VALUE),
+            MaxValueValidator(MAX_VALUE)
         ]
     )
     ingredients = models.ManyToManyField(
@@ -140,25 +204,6 @@ class Recipe(models.Model):
         return textwrap.shorten(self.name, width=TEXT_WIDTH, placeholder='...')
 
 
-class ShoppingCart(models.Model):
-    user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name='user_cart'
-    )
-    recipe = models.ForeignKey(
-        Recipe,
-        on_delete=models.CASCADE,
-        related_name='carts',
-        blank=True
-    )
-
-    class Meta:
-        verbose_name = 'Корзина'
-        verbose_name_plural = 'Корзины'
-        unique_together = ('recipe', 'user')
-
-
 class RecipeIngredient(models.Model):
     """
     Промежуточная модель для связи рецептов с ингредиентами.
@@ -173,33 +218,23 @@ class RecipeIngredient(models.Model):
     )
     amount = models.PositiveSmallIntegerField(
         verbose_name='Количество',
+        validators=[
+            MinValueValidator(MIN_VALUE),
+            MaxValueValidator(MAX_VALUE)
+        ]
     )
 
     class Meta:
         verbose_name = 'Количество ингредиента в рецепте'
         verbose_name_plural = 'Количества ингредиентов в рецептах'
-        unique_together = ('recipe', 'ingredient')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['recipe', 'ingredient'], name='unique_ingredients'
+            ),
+        ]
 
     def __str__(self):
         return (
             f'{self.ingredient.name}: {self.amount} '
             f'{self.ingredient.measurement_unit}'
         )
-
-
-class RecipeFavorites(models.Model):
-    """Промежуточная модель рецептов, добавленных в избранное."""
-
-    recipe = models.ForeignKey(
-        Recipe, on_delete=models.CASCADE, related_name='recipe_favorites'
-    )
-    favorites = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name='favorites_recipe'
-    )
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=['recipe', 'favorites'], name='unique_favorites'
-            ),
-        ]

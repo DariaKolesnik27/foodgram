@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from django.db.models import Exists, OuterRef, Sum, Value
+from django.db.models import Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
@@ -68,33 +68,13 @@ class RecipeViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        user = self.request.user
-        if user.is_authenticated:
-            is_favorited_subquery = Exists(
-                RecipeFavorites.objects.filter(
-                    recipe=OuterRef('pk'),
-                    favorites=user
-                )
-            )
-            is_in_cart_subquery = Exists(
-                ShoppingCart.objects.filter(
-                    recipe=OuterRef('pk'),
-                    user=user
-                )
-            )
-        else:
-            is_favorited_subquery = Value(False)
-            is_in_cart_subquery = Value(False)
-
-        return queryset.annotate(
-            is_favorited=is_favorited_subquery,
-            is_in_shopping_cart=is_in_cart_subquery
-        )
+        return queryset.in_collection(self.request.user)
 
     def get_shopping_list(self, request):
         ingredient_total = (
-            RecipeIngredient.objects.filter(recipe__carts__user=request.user)
-            .values(
+            RecipeIngredient.objects.filter(
+                recipe__shoppingcart_recipes__user=request.user
+            ).values(
                 'ingredient__name',
                 'ingredient__measurement_unit',
             )
@@ -140,9 +120,10 @@ class RecipeViewSet(viewsets.ModelViewSet):
         )
         return response
 
-    def _add_item(self, request, recipe, model, lookup_kwargs):
+    def _add_item(self, request, recipe, model, user):
         obj, created = model.objects.get_or_create(
-            **lookup_kwargs
+            recipe=recipe,
+            user=user
         )
         if not created:
             return Response(status=status.HTTP_400_BAD_REQUEST)
@@ -151,9 +132,10 @@ class RecipeViewSet(viewsets.ModelViewSet):
         )
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-    def _remove_item(self, request, model, lookup_kwargs):
+    def _remove_item(self, request, model, recipe, user):
         deleted_count, _ = model.objects.filter(
-            **lookup_kwargs
+            recipe=recipe,
+            user=user
         ).delete()
         if deleted_count == 0:
             return Response(status=status.HTTP_400_BAD_REQUEST)
@@ -171,7 +153,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
             request=request,
             recipe=recipe,
             model=ShoppingCart,
-            lookup_kwargs={'user': request.user, 'recipe': recipe}
+            user=request.user
         )
 
     @shopping_cart.mapping.delete
@@ -180,7 +162,8 @@ class RecipeViewSet(viewsets.ModelViewSet):
         return self._remove_item(
             model=ShoppingCart,
             request=request,
-            lookup_kwargs={'user': request.user, 'recipe': recipe}
+            user=request.user,
+            recipe=recipe
         )
 
     @action(
@@ -195,7 +178,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
             request=request,
             recipe=recipe,
             model=RecipeFavorites,
-            lookup_kwargs={'favorites': request.user, 'recipe': recipe}
+            user=request.user
         )
 
     @favorite.mapping.delete
@@ -204,7 +187,8 @@ class RecipeViewSet(viewsets.ModelViewSet):
         return self._remove_item(
             model=RecipeFavorites,
             request=request,
-            lookup_kwargs={'favorites': request.user, 'recipe': recipe}
+            user=request.user,
+            recipe=recipe
         )
 
     def get_serializer_class(self):

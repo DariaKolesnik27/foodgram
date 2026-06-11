@@ -18,8 +18,10 @@ class ImageUrlMixin:
 class SubscriptionMixin:
     def get_is_subscribed(self, obj):
         request = self.context.get('request')
-        if not request:
-            return False
-        if not request.user.is_authenticated:
-            return False
-        return Follow.objects.filter(user=request.user, following=obj).exists()
+        return bool(
+            request
+            and request.user.is_authenticated
+            and Follow.objects.filter(
+                user=request.user, following=obj
+            ).exists()
+        )
