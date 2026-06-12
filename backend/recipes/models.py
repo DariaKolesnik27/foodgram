@@ -81,14 +81,15 @@ class ShoppingCartFavoritesAbstractModel(models.Model):
         abstract = True
         constraints = [
             models.UniqueConstraint(
-                fields=['recipe', 'user'], name='unique_%(model_name)s'
+                fields=['recipe', 'user'],
+                name='%(app_label)s_%(class)s_unique'
             ),
         ]
 
 
 class ShoppingCart(ShoppingCartFavoritesAbstractModel):
 
-    class Meta:
+    class Meta(ShoppingCartFavoritesAbstractModel.Meta):
         verbose_name = 'Корзина'
         verbose_name_plural = 'Корзины'
 
@@ -96,7 +97,7 @@ class ShoppingCart(ShoppingCartFavoritesAbstractModel):
 class RecipeFavorites(ShoppingCartFavoritesAbstractModel):
     """Промежуточная модель рецептов, добавленных в избранное."""
 
-    class Meta:
+    class Meta(ShoppingCartFavoritesAbstractModel.Meta):
         verbose_name = 'Избранное'
         verbose_name_plural = 'Избранные'
 
